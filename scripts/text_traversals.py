@@ -39,8 +39,8 @@ def interpolate(model, feats: torch.Tensor, root_feat: torch.Tensor, steps: int)
 
     # Linear interpolation between root and image features. For MERU, this happens
     # in the tangent space of the origin.
-    if isinstance(model, MERU):
-        feats = L.log_map0(feats, model.curv.exp())
+    #if isinstance(model, MERU):
+    #    feats = L.log_map0(feats, model.curv.exp())
         #feats = L.exp_map0(feats, model.curv.exp())
     interp_feats = [
         torch.lerp(root_feat, feats, weight.item())
@@ -166,7 +166,6 @@ def main(_A: argparse.Namespace):
 
     target_tokens = tokenizer([_A.target_prompt])
     target_feats = model.encode_text(target_tokens, project=True)[0]
-    print('!!! ', _A.target_prompt, target_feats.shape)
 
     interp_feats = interpolate(model, target_feats, root_feat, _A.steps)
     nn1_scores = calc_scores(model, interp_feats, text_feats_pool, has_root=True)
@@ -175,7 +174,7 @@ def main(_A: argparse.Namespace):
     nn1_texts = [text_pool[_idx.item()] for _idx in _nn1_idxs]
 
     # De-duplicate retrieved texts (multiple points may have same NN) and print.
-    print(f"Texts retrieved from [IMAGE] -> [ROOT] traversal:")
+    print(f"Texts retrieved from [TEXT] -> [ROOT] traversal:")
     unique_nn1_texts = []
     for _text in nn1_texts:
         if _text not in unique_nn1_texts:
