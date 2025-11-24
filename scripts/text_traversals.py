@@ -114,7 +114,6 @@ def get_text_feats(model: MERU | CLIPBaseline) -> tuple[list[str], torch.Tensor]
     noun_prompt_tokens = tokenizer(
         [NOUN_PROMPT.format(tag) for tag in pexels_text["nouns"]]
     )
-    print('!!!!! ', model.encode_text(noun_prompt_tokens, project=True).shape)
     all_text_feats.append(model.encode_text(noun_prompt_tokens, project=True))
 
     adj_prompt_tokens = tokenizer(
@@ -165,7 +164,7 @@ def main(_A: argparse.Namespace):
 
     tokenizer = Tokenizer()
     target_tokens = tokenizer([_A.target_prompt])
-    target_feats = model.encode_text(target_tokens, project=True)
+    target_feats = model.encode_text(target_tokens, project=True)[0]
     print('!!! ', target_feats.shape)
 
     interp_feats = interpolate(model, target_feats, root_feat, _A.steps)
