@@ -165,6 +165,8 @@ def main(_A: argparse.Namespace):
     tokenizer = Tokenizer()
     target_tokens = tokenizer(_A.target_prompt)
     target_feats = model.encode_text(target_tokens, project=True)
+    print('!!! ', target_feats.shape)
+
 
     interp_feats = interpolate(model, target_feats, root_feat, _A.steps)
     nn1_scores = calc_scores(model, interp_feats, text_feats_pool, has_root=True)
