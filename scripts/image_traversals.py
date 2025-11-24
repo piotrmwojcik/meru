@@ -149,7 +149,7 @@ def main(_A: argparse.Namespace):
         root_feat = torch.zeros(_C_TRAIN.model.embed_dim, device=device)
     else:
         # CLIP model checkpoint should have the 'root' embedding.
-        root_feat = torch.load(_A.checkpoint_path)["root"].to(device)
+        root_feat = torch.load(_A.checkpoint_path, weights_only=False)["root"].to(device)
 
     # If no external text features are provided, use captions/tags from pexels.
     text_pool, text_feats_pool = get_text_feats(model)
