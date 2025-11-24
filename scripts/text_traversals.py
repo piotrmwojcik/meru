@@ -164,7 +164,7 @@ def main(_A: argparse.Namespace):
 
     tokenizer = Tokenizer()
     target_tokens = tokenizer(_A.target_prompt)
-    target_feats = model.encode_text(target_tokens, project=True)
+    target_feats = model.encode_text(target_tokens, project=True).squeeze()
     print('!!! ', target_feats.shape)
 
 
