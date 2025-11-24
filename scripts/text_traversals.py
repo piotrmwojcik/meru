@@ -162,6 +162,7 @@ def main(_A: argparse.Namespace):
     print(f"\nPerforming text traversals with source: {_A.target_prompt}...")
     # ------------------------------------------------------------------------
 
+    tokenizer = Tokenizer()
     target_tokens = tokenizer(args.target_token)
     target_feats = model.encode_text(target_tokens, project=True)
 
