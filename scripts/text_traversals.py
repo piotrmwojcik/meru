@@ -232,7 +232,7 @@ def main(_A: argparse.Namespace):
         # --------------------------------------------------------------------
         print(f"Performing image traversals with source image: {_A.image_path}...")
         # --------------------------------------------------------------------
-        image_feats = model.encode_image(image[None, ...], project=True)[0]
+        image_feats = model.encode_image(image[None, ...], project=False)[0]
 
         interp_feats = interpolate(model, image_feats, root_feat, _A.steps)
         nn1_scores = calc_scores(model, interp_feats, text_feats_pool, has_root=True)
