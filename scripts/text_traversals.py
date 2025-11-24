@@ -28,7 +28,7 @@ parser = argparse.ArgumentParser(description=__doc__)
 _AA = parser.add_argument
 _AA("--checkpoint-path", help="Path to checkpoint of a trained MERU/CLIP model.")
 _AA("--train-config", help="Path to train config (.yaml/py) for given checkpoint.")
-_AA("--image-path", help="Path to an image (.jpg) for perfoming traversal.")
+_AA("--target-prompt", help="Path to an image (.jpg) for perfoming traversal.")
 _AA("--steps", type=int, default=50, help="Number of traversal steps.")
 
 
@@ -159,17 +159,13 @@ def main(_A: argparse.Namespace):
     text_feats_pool = torch.cat([text_feats_pool, root_feat[None, ...]])
 
     # ------------------------------------------------------------------------
-    print(f"\nPerforming image traversals with source: {_A.image_path}...")
+    print(f"\nPerforming text traversals with source: {_A.image_path}...")
     # ------------------------------------------------------------------------
-    image = Image.open(_A.image_path).convert("RGB")
 
-    image_transform = T.Compose(
-        [T.Resize(224, T.InterpolationMode.BICUBIC), T.CenterCrop(224), T.ToTensor()]
-    )
-    image = image_transform(image).to(device)
-    image_feats = model.encode_image(image[None, ...], project=True)[0]
+    target_tokens = tokenizer(args.target_token)
+    target_feats = model.encode_text(target_tokens, project=True)
 
-    interp_feats = interpolate(model, image_feats, root_feat, _A.steps)
+    interp_feats = interpolate(model, target_feats, root_feat, _A.steps)
     nn1_scores = calc_scores(model, interp_feats, text_feats_pool, has_root=True)
 
     nn1_scores, _nn1_idxs = nn1_scores.max(dim=-1)
