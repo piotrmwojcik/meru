@@ -114,6 +114,7 @@ def get_text_feats(model: MERU | CLIPBaseline) -> tuple[list[str], torch.Tensor]
     noun_prompt_tokens = tokenizer(
         [NOUN_PROMPT.format(tag) for tag in pexels_text["nouns"]]
     )
+    print('!!!!! ', model.encode_text(noun_prompt_tokens, project=True).shape)
     all_text_feats.append(model.encode_text(noun_prompt_tokens, project=True))
 
     adj_prompt_tokens = tokenizer(
