@@ -96,7 +96,7 @@ def calc_scores(
 @torch.inference_mode()
 def get_text_feats(model: MERU | CLIPBaseline) -> tuple[list[str], torch.Tensor]:
     # Get all captions, nouns, and ajectives collected from pexels.com website
-    pexels_text = json.load(open("assets/pexels_text.json"))
+    pexels_text = json.load(open("assets/nsfw.json"))
 
     # Use very simple prompts for noun and adjective tags.
     tokenizer = Tokenizer()
