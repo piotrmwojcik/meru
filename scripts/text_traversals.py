@@ -17,6 +17,8 @@ import torch
 from PIL import Image
 from torchvision import transforms as T
 
+import pandas as pd  # <-- NEW
+
 from meru import lorentz as L
 from meru.config import LazyConfig, LazyFactory
 from meru.models import MERU, CLIPBaseline
@@ -28,8 +30,22 @@ parser = argparse.ArgumentParser(description=__doc__)
 _AA = parser.add_argument
 _AA("--checkpoint-path", help="Path to checkpoint of a trained MERU/CLIP model.")
 _AA("--train-config", help="Path to train config (.yaml/py) for given checkpoint.")
-_AA("--target-prompt", help="Path to an image (.jpg) for perfoming traversal.")
+_AA("--image-path", help="Path to an image (.jpg) for perfoming traversal.")
 _AA("--steps", type=int, default=50, help="Number of traversal steps.")
+
+# NEW: CSV with prompts + nudity filtering
+_AA("--csv-path", type=str, help="Path to CSV file containing target prompts.")
+_AA(
+    "--nudity",
+    action="store_true",
+    help="If set, filter CSV by nudity_percentage > 0 (if column exists).",
+)
+_AA(
+    "--prompt-column",
+    type=str,
+    default="target_prompt",
+    help="Name of column in CSV containing prompts.",
+)
 
 
 def interpolate(model, feats: torch.Tensor, root_feat: torch.Tensor, steps: int):
@@ -39,9 +55,9 @@ def interpolate(model, feats: torch.Tensor, root_feat: torch.Tensor, steps: int)
 
     # Linear interpolation between root and image features. For MERU, this happens
     # in the tangent space of the origin.
-    #if isinstance(model, MERU):
-    #    feats = L.log_map0(feats, model.curv.exp())
-        #feats = L.exp_map0(feats, model.curv.exp())
+    if isinstance(model, MERU):
+        feats = L.log_map0(feats, model.curv.exp())
+
     interp_feats = [
         torch.lerp(root_feat, feats, weight.item())
         for weight in torch.linspace(0.0, 1.0, steps=steps)
@@ -95,8 +111,8 @@ def calc_scores(
 
 @torch.inference_mode()
 def get_text_feats(model: MERU | CLIPBaseline) -> tuple[list[str], torch.Tensor]:
-    # Get all captions, nouns, and ajectives collected from pexels.com website
-    pexels_text = json.load(open("assets/nsfw_pexels.json"))
+    # Get all captions, nouns, and adjectives collected from pexels.com website
+    pexels_text = json.load(open("assets/nsfw.json"))
 
     # Use very simple prompts for noun and adjective tags.
     tokenizer = Tokenizer()
@@ -110,7 +126,6 @@ def get_text_feats(model: MERU | CLIPBaseline) -> tuple[list[str], torch.Tensor]
     all_text_feats.append(model.encode_text(caption_tokens, project=True))
 
     # Tokenize and encode prompts filled with tags.
-    # Extract features of all captions and tags.
     noun_prompt_tokens = tokenizer(
         [NOUN_PROMPT.format(tag) for tag in pexels_text["nouns"]]
     )
@@ -130,9 +145,49 @@ def get_text_feats(model: MERU | CLIPBaseline) -> tuple[list[str], torch.Tensor]
     return all_pexels_text, all_text_feats
 
 
+def load_and_filter_prompts(args: argparse.Namespace) -> list[str]:
+    """
+    Load prompts from CSV and optionally filter by nudity_percentage.
+    Returns a list of prompt strings.
+    """
+    if args.csv_path is None:
+        # No CSV: single dummy "prompt" so main loop still runs once.
+        return ["__single_run__"]
+
+    df = pd.read_csv(args.csv_path, index_col=0)
+
+    # Check if this is an NSFW dataset with nudity_percentage column
+    if args.nudity and "nudity_percentage" in df.columns:
+        # ensure numeric (coerce bad values to NaN)
+        df["nudity_percentage"] = pd.to_numeric(
+            df["nudity_percentage"], errors="coerce"
+        )
+        # keep rows with nudity_percentage > 0
+        df = df[df["nudity_percentage"].gt(0)]
+        # sort descending
+        df = df.sort_values(by="nudity_percentage", ascending=False)
+
+    if args.csv_path is not None:
+        if args.prompt_column not in df.columns:
+            raise ValueError(
+                f"Prompt column '{args.prompt_column}' not found in CSV "
+                f"(available: {list(df.columns)})"
+            )
+        prompts = (
+            df[args.prompt_column]
+            .astype(str)
+            .dropna()
+            .tolist()
+        )
+    else:
+        prompts = ["__single_run__"]
+
+    return prompts
+
+
 @torch.inference_mode()
 def main(_A: argparse.Namespace):
-    # Get the current device (this will be `cuda:0` here by default) or use CPU.
+    # Get device
     device = (
         torch.cuda.current_device()
         if torch.cuda.is_available()
@@ -142,44 +197,59 @@ def main(_A: argparse.Namespace):
     # Create the model using training config and load pre-trained weights.
     _C_TRAIN = LazyConfig.load(_A.train_config)
     model = LazyFactory.build_model(_C_TRAIN, device).eval()
-
     CheckpointManager(model=model).load(_A.checkpoint_path)
 
     if isinstance(model, MERU):
         root_feat = torch.zeros(_C_TRAIN.model.embed_dim, device=device)
     else:
         # CLIP model checkpoint should have the 'root' embedding.
-        root_feat = torch.load(_A.checkpoint_path, weights_only=False)["root"].to(device)
+        root_feat = torch.load(_A.checkpoint_path, weights_only=False)["root"].to(
+            device
+        )
 
-    # If no external text features are provided, use captions/tags from pexels.
+    # Compute text pool only once
     text_pool, text_feats_pool = get_text_feats(model)
-
     # Add [ROOT] to the pool of text feats.
     text_pool.append("[ROOT]")
     text_feats_pool = torch.cat([text_feats_pool, root_feat[None, ...]])
 
-    # ------------------------------------------------------------------------
-    print(f"\nPerforming text traversals with source: {_A.target_prompt}...")
-    # ------------------------------------------------------------------------
+    # Prepare image transform once
+    image_transform = T.Compose(
+        [T.Resize(224, T.InterpolationMode.BICUBIC), T.CenterCrop(224), T.ToTensor()]
+    )
 
-    tokenizer = Tokenizer()
+    # Load all prompts (and apply nudity filtering if requested)
+    prompts = load_and_filter_prompts(_A)
 
-    target_tokens = tokenizer([_A.target_prompt])
-    target_feats = model.encode_text(target_tokens, project=True)[0]
+    # Iterate through prompts and run the traversal for each target prompt
+    for i, prompt in enumerate(prompts):
+        print("\n" + "=" * 80)
+        if _A.csv_path is not None:
+            print(f"[{i+1}/{len(prompts)}] Target prompt: {prompt}")
+        else:
+            print(f"[{i+1}/{len(prompts)}] Single run (no CSV)")
 
-    interp_feats = interpolate(model, target_feats, root_feat, _A.steps)
-    nn1_scores = calc_scores(model, interp_feats, text_feats_pool, has_root=True)
+        # --------------------------------------------------------------------
+        print(f"Performing image traversals with source image: {_A.image_path}...")
+        # --------------------------------------------------------------------
+        image_feats = model.encode_image(image[None, ...], project=True)[0]
 
-    nn1_scores, _nn1_idxs = nn1_scores.max(dim=-1)
-    nn1_texts = [text_pool[_idx.item()] for _idx in _nn1_idxs]
+        interp_feats = interpolate(model, image_feats, root_feat, _A.steps)
+        nn1_scores = calc_scores(model, interp_feats, text_feats_pool, has_root=True)
 
-    # De-duplicate retrieved texts (multiple points may have same NN) and print.
-    print(f"Texts retrieved from [TEXT] -> [ROOT] traversal:")
-    unique_nn1_texts = []
-    for _text in nn1_texts:
-        if _text not in unique_nn1_texts:
-            unique_nn1_texts.append(_text)
-            print(f"  - {_text}")
+        nn1_scores, _nn1_idxs = nn1_scores.max(dim=-1)
+        nn1_texts = [text_pool[_idx.item()] for _idx in _nn1_idxs]
+
+        # De-duplicate retrieved texts (multiple points may have same NN) and print.
+        print(f"Texts retrieved from [IMAGE] -> [ROOT] traversal:")
+        unique_nn1_texts = []
+        for _text in nn1_texts:
+            if _text not in unique_nn1_texts:
+                unique_nn1_texts.append(_text)
+                print(f"  - {_text}")
+
+        # Optional: you could here log/save results together with `prompt`
+        # if you want to associate traversal outputs with each target prompt.
 
 
 if __name__ == "__main__":
