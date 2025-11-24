@@ -55,8 +55,8 @@ def interpolate(model, feats: torch.Tensor, root_feat: torch.Tensor, steps: int)
 
     # Linear interpolation between root and image features. For MERU, this happens
     # in the tangent space of the origin.
-    if isinstance(model, MERU):
-        feats = L.log_map0(feats, model.curv.exp())
+    #if isinstance(model, MERU):
+    #    feats = L.log_map0(feats, model.curv.exp())
 
     interp_feats = [
         torch.lerp(root_feat, feats, weight.item())
@@ -213,10 +213,6 @@ def main(_A: argparse.Namespace):
     text_pool.append("[ROOT]")
     text_feats_pool = torch.cat([text_feats_pool, root_feat[None, ...]])
 
-    # Prepare image transform once
-    image_transform = T.Compose(
-        [T.Resize(224, T.InterpolationMode.BICUBIC), T.CenterCrop(224), T.ToTensor()]
-    )
 
     # Load all prompts (and apply nudity filtering if requested)
     prompts = load_and_filter_prompts(_A)
@@ -230,18 +226,21 @@ def main(_A: argparse.Namespace):
             print(f"[{i+1}/{len(prompts)}] Single run (no CSV)")
 
         # --------------------------------------------------------------------
-        print(f"Performing image traversals with source image: {_A.image_path}...")
+        print(f"Performing text traversals with source prompt: {prompt}...")
         # --------------------------------------------------------------------
-        image_feats = model.encode_image(image[None, ...], project=False)[0]
+        tokenizer = Tokenizer()
 
-        interp_feats = interpolate(model, image_feats, root_feat, _A.steps)
+        text_tokens = tokenizer([prompt])
+        text_feats = model.encode_text(text_tokens, project=False)
+
+        interp_feats = interpolate(model, text_feats, root_feat, _A.steps)
         nn1_scores = calc_scores(model, interp_feats, text_feats_pool, has_root=True)
 
         nn1_scores, _nn1_idxs = nn1_scores.max(dim=-1)
         nn1_texts = [text_pool[_idx.item()] for _idx in _nn1_idxs]
 
         # De-duplicate retrieved texts (multiple points may have same NN) and print.
-        print(f"Texts retrieved from [IMAGE] -> [ROOT] traversal:")
+        print(f"Texts retrieved from [TEXT] -> [ROOT] traversal:")
         unique_nn1_texts = []
         for _text in nn1_texts:
             if _text not in unique_nn1_texts:
