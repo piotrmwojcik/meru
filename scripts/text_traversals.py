@@ -163,7 +163,7 @@ def main(_A: argparse.Namespace):
     # ------------------------------------------------------------------------
 
     tokenizer = Tokenizer()
-    target_tokens = tokenizer(_A.target_token)
+    target_tokens = tokenizer(_A.target_prompt)
     target_feats = model.encode_text(target_tokens, project=True)
 
     interp_feats = interpolate(model, target_feats, root_feat, _A.steps)
