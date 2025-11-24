@@ -159,7 +159,7 @@ def main(_A: argparse.Namespace):
     text_feats_pool = torch.cat([text_feats_pool, root_feat[None, ...]])
 
     # ------------------------------------------------------------------------
-    print(f"\nPerforming text traversals with source: {_A.image_path}...")
+    print(f"\nPerforming text traversals with source: {_A.target_prompt}...")
     # ------------------------------------------------------------------------
 
     target_tokens = tokenizer(args.target_token)
