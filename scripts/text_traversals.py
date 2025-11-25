@@ -116,8 +116,8 @@ def get_text_feats(model: MERU | CLIPBaseline) -> tuple[list[str], torch.Tensor]
 
     # Use very simple prompts for noun and adjective tags.
     tokenizer = Tokenizer()
-    NOUN_PROMPT = "a photo of a {}."
-    ADJ_PROMPT = "this photo is {}."
+    NOUN_PROMPT = "{}"
+    ADJ_PROMPT = "this is {}."
 
     all_text_feats = []
 
@@ -145,45 +145,54 @@ def get_text_feats(model: MERU | CLIPBaseline) -> tuple[list[str], torch.Tensor]
     return all_pexels_text, all_text_feats
 
 
-def load_and_filter_prompts(args: argparse.Namespace) -> list[str]:
+def load_and_filter_prompts(args: argparse.Namespace) -> Tuple[List[str], Optional[List[Optional[float]]]]:
     """
     Load prompts from CSV and optionally filter by nudity_percentage.
-    Returns a list of prompt strings.
+    Returns:
+        prompts: list of prompt strings
+        nudity_percentages: list of floats (or None if unavailable), aligned with prompts,
+                            or None if no CSV was provided.
     """
     if args.csv_path is None:
         # No CSV: single dummy "prompt" so main loop still runs once.
-        return ["__single_run__"]
+        return ["__single_run__"], None
 
     df = pd.read_csv(args.csv_path, index_col=0)
 
-    # Check if this is an NSFW dataset with nudity_percentage column
-    if args.nudity and "nudity_percentage" in df.columns:
-        # ensure numeric (coerce bad values to NaN)
-        df["nudity_percentage"] = pd.to_numeric(
-            df["nudity_percentage"], errors="coerce"
-        )
-        # keep rows with nudity_percentage > 0
-        df = df[df["nudity_percentage"].gt(0)]
-        # sort descending
-        df = df.sort_values(by="nudity_percentage", ascending=False)
+    # If a nudity_percentage column exists, make it numeric first
+    if "nudity_percentage" in df.columns:
+        df["nudity_percentage"] = pd.to_numeric(df["nudity_percentage"], errors="coerce")
 
-    if args.csv_path is not None:
-        if args.prompt_column not in df.columns:
-            raise ValueError(
-                f"Prompt column '{args.prompt_column}' not found in CSV "
-                f"(available: {list(df.columns)})"
-            )
-        prompts = (
-            df[args.prompt_column]
-            .astype(str)
-            .dropna()
-            .tolist()
+        # If requested, filter and sort by nudity_percentage
+        if args.nudity:
+            # keep rows with nudity_percentage > 0
+            df = df[df["nudity_percentage"].gt(0)]
+            # sort descending
+            df = df.sort_values(by="nudity_percentage", ascending=False)
+
+    # Now extract prompts
+    if args.prompt_column not in df.columns:
+        raise ValueError(
+            f"Prompt column '{args.prompt_column}' not found in CSV "
+            f"(available: {list(df.columns)})"
         )
+
+    prompts = df[args.prompt_column].astype(str).dropna().tolist()
+
+    # Align nudity percentages with those prompts (if column exists)
+    if "nudity_percentage" in df.columns:
+        nudity_series = df.loc[df[args.prompt_column].astype(str).notna(), "nudity_percentage"]
+        nudity_percentages_raw = nudity_series.tolist()
+
+        # Replace NaN with None for convenience
+        nudity_percentages: List[Optional[float]] = [
+            (None if (isinstance(x, float) and math.isnan(x)) else x)
+            for x in nudity_percentages_raw
+        ]
     else:
-        prompts = ["__single_run__"]
+        nudity_percentages = [None] * len(prompts)
 
-    return prompts
-
+    return prompts, nudity_percentages
 
 @torch.inference_mode()
 def main(_A: argparse.Namespace):
@@ -213,18 +222,22 @@ def main(_A: argparse.Namespace):
     text_pool.append("[ROOT]")
     text_feats_pool = torch.cat([text_feats_pool, root_feat[None, ...]])
 
-
+    prompts, nudity_percentages = load_and_filter_prompts(_A)
     # Load all prompts (and apply nudity filtering if requested)
-    prompts = load_and_filter_prompts(_A)
-
-    # Iterate through prompts and run the traversal for each target prompt
     for i, prompt in enumerate(prompts):
         print("\n" + "=" * 80)
-        if _A.csv_path is not None:
-            print(f"[{i+1}/{len(prompts)}] Target prompt: {prompt}")
-        else:
-            print(f"[{i+1}/{len(prompts)}] Single run (no CSV)")
 
+        # Get corresponding nudity percentage if available
+        nudity_str = ""
+        if nudity_percentages is not None:
+            nudity = nudity_percentages[i]
+            if nudity is not None:
+                nudity_str = f" | nudity_percentage: {nudity:.2f}"
+
+        if _A.csv_path is not None:
+            print(f"[{i + 1}/{len(prompts)}] Target prompt: {prompt}{nudity_str}")
+        else:
+            print(f"[{i + 1}/{len(prompts)}] Single run (no CSV)")
         # --------------------------------------------------------------------
         print(f"Performing text traversals with source prompt: {prompt}...")
         # --------------------------------------------------------------------
