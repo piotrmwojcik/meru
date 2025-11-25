@@ -154,7 +154,7 @@ def get_text_feats(model: MERU | CLIPBaseline) -> tuple[list[str], torch.Tensor]
         "{} in a sketch painting",
     ]
 
-    NOUN_PROMPT = [
+    noun_prompts = [
         template.format(tag)
         for tag in pexels_text["nouns"]
         for template in AUG_TEMPLATES
@@ -168,9 +168,7 @@ def get_text_feats(model: MERU | CLIPBaseline) -> tuple[list[str], torch.Tensor]
     #all_text_feats.append(model.encode_text(caption_tokens, project=True))
 
     # Tokenize and encode prompts filled with tags.
-    noun_prompt_tokens = tokenizer(
-        [NOUN_PROMPT.format(tag) for tag in pexels_text["nouns"]]
-    )
+    noun_prompt_tokens = tokenizer(noun_prompts)
     all_text_feats.append(model.encode_text(noun_prompt_tokens, project=True))
 
     adj_prompt_tokens = tokenizer(
