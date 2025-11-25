@@ -104,7 +104,7 @@ def calc_scores(
             entailment_energy[-1, ...] = 0
         #print(entailment_energy)
         # Set a large negative score if text does not entail image.
-        scores[entailment_energy.T > 1e-3] = -1e12
+        scores[entailment_energy.T > 1e-2] = -1e12
         return scores
     else:
         # model is not needed here.
@@ -124,8 +124,8 @@ def get_text_feats(model: MERU | CLIPBaseline) -> tuple[list[str], torch.Tensor]
     all_text_feats = []
 
     # Tokenize and encode captions.
-    caption_tokens = tokenizer(pexels_text["captions"])
-    all_text_feats.append(model.encode_text(caption_tokens, project=True))
+    #caption_tokens = tokenizer(pexels_text["captions"])
+    #all_text_feats.append(model.encode_text(caption_tokens, project=True))
 
     # Tokenize and encode prompts filled with tags.
     noun_prompt_tokens = tokenizer(
