@@ -118,7 +118,47 @@ def get_text_feats(model: MERU | CLIPBaseline) -> tuple[list[str], torch.Tensor]
 
     # Use very simple prompts for noun and adjective tags.
     tokenizer = Tokenizer()
-    NOUN_PROMPT = "{}"
+
+    AUG_TEMPLATES = [
+        "{}",
+        "{} in a photo",
+        "{} in a snapshot",
+        "A snapshot of {}",
+        "A photograph showcasing {}",
+        "An illustration of {}",
+        "A digital rendering of {}",
+        "A visual representation of {}",
+        "A graphic of {}",
+        "A shot of {}",
+        "A photo of {}",
+        "A black and white image of {}",
+        "A depiction in portrait form of {}",
+        "A scene depicting {} during a public gathering",
+        "{} captured in an image",
+        "A depiction created with oil paints capturing {}",
+        "An image of {}",
+        "A drawing capturing the essence of {}",
+        "An official photograph featuring {}",
+        "A detailed sketch of {}",
+        "{} during sunset/sunrise",
+        "{} in a detailed portrait",
+        "An official photo of {}",
+        "Historic photo of {}",
+        "Detailed portrait of {}",
+        "A painting of {}",
+        "HD picture of {}",
+        "Magazine cover capturing {}",
+        "Painting-like image of {}",
+        "Hand-drawn art of {}",
+        "An oil portrait of {}",
+        "{} in a sketch painting",
+    ]
+
+    NOUN_PROMPT = [
+        template.format(tag)
+        for tag in pexels_text["nouns"]
+        for template in AUG_TEMPLATES
+    ]
     ADJ_PROMPT = "this is {}."
 
     all_text_feats = []
