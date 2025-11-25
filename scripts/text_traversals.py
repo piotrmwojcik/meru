@@ -117,7 +117,6 @@ def get_text_feats(model: MERU | CLIPBaseline) -> tuple[list[str], torch.Tensor]
     pexels_text = json.load(open("assets/nsfw.json"))
 
     # Use very simple prompts for noun and adjective tags.
-    tokenizer = Tokenizer()
 
     AUG_TEMPLATES = [
         "{}",
