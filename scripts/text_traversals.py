@@ -56,8 +56,8 @@ def interpolate(model, feats: torch.Tensor, root_feat: torch.Tensor, steps: int)
 
     # Linear interpolation between root and image features. For MERU, this happens
     # in the tangent space of the origin.
-    #if isinstance(model, MERU):
-    #    feats = L.log_map0(feats, model.curv.exp())
+    if isinstance(model, MERU):
+        feats = L.log_map0(feats, model.curv.exp())
 
     interp_feats = [
         torch.lerp(root_feat, feats, weight.item())
@@ -245,7 +245,7 @@ def main(_A: argparse.Namespace):
         tokenizer = Tokenizer()
 
         text_tokens = tokenizer([prompt])
-        text_feats = model.encode_text(text_tokens, project=False)[0]
+        text_feats = model.encode_text(text_tokens, project=True)[0]
 
         interp_feats = interpolate(model, text_feats, root_feat, _A.steps)
         nn1_scores = calc_scores(model, interp_feats, text_feats_pool, has_root=True)
