@@ -163,25 +163,30 @@ def get_text_feats(model: MERU | CLIPBaseline) -> tuple[list[str], torch.Tensor]
 
     all_text_feats = []
 
-    # Tokenize and encode captions.
-    #caption_tokens = tokenizer(pexels_text["captions"])
-    #all_text_feats.append(model.encode_text(caption_tokens, project=True))
+    tokenizer = Tokenizer()  # make sure this exists above
 
-    # Tokenize and encode prompts filled with tags.
+    # If you don't use captions right now, just skip encoding them:
+    # caption_tokens = tokenizer(pexels_text["captions"])
+    # all_text_feats.append(model.encode_text(caption_tokens, project=True))
+
+    # Noun prompts (with augmentations)
     noun_prompt_tokens = tokenizer(noun_prompts)
     all_text_feats.append(model.encode_text(noun_prompt_tokens, project=True))
 
-    adj_prompt_tokens = tokenizer(
-        [ADJ_PROMPT.format(tag) for tag in pexels_text["adjectives"]]
-    )
+    # Adjective prompts
+    adj_prompts = [ADJ_PROMPT.format(tag) for tag in pexels_text["adjectives"]]
+    adj_prompt_tokens = tokenizer(adj_prompts)
     all_text_feats.append(model.encode_text(adj_prompt_tokens, project=True))
 
     all_text_feats = torch.cat(all_text_feats, dim=0)
+
+    # IMPORTANT: use the same strings you actually encoded
     all_pexels_text = [
-        *pexels_text["captions"],
-        *pexels_text["nouns"],
-        *pexels_text["adjectives"],
+        # *pexels_text["captions"],  # uncomment only if you also encode captions above
+        *noun_prompts,
+        *adj_prompts,
     ]
+
     return all_pexels_text, all_text_feats
 
 
