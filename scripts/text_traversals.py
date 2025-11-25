@@ -101,7 +101,7 @@ def calc_scores(
         # Root entails everything.
         if has_root:
             entailment_energy[-1, ...] = 0
-
+        print(entailment_energy)
         # Set a large negative score if text does not entail image.
         scores[entailment_energy.T > 0] = -1e12
         return scores
@@ -246,8 +246,6 @@ def main(_A: argparse.Namespace):
 
         text_tokens = tokenizer([prompt])
         text_feats = model.encode_text(text_tokens, project=True)[0]
-
-        root_feat = model.encode_text(tokenizer(["a person"]), project=True)[0]
 
         interp_feats = interpolate(model, text_feats, root_feat, _A.steps)
         nn1_scores = calc_scores(model, interp_feats, text_feats_pool, has_root=True)
