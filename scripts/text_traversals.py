@@ -57,7 +57,6 @@ def interpolate(model, feats: torch.Tensor, root_feat: torch.Tensor, steps: int)
     # Linear interpolation between root and image features. For MERU, this happens
     # in the tangent space of the origin.
     if isinstance(model, MERU):
-        print('!!!')
         feats = L.log_map0(feats, model.curv.exp())
 
     interp_feats = [
@@ -103,9 +102,9 @@ def calc_scores(
         # Root entails everything.
         if has_root:
             entailment_energy[-1, ...] = 0
-        print(entailment_energy)
+        #print(entailment_energy)
         # Set a large negative score if text does not entail image.
-        scores[entailment_energy.T > 0] = -1e12
+        scores[entailment_energy.T > 1e-3] = -1e12
         return scores
     else:
         # model is not needed here.
